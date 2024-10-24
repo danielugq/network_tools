@@ -22,7 +22,10 @@ python -m pip install git+https://github.com/danielugq/network_tools@main
 
 ## Description
 
-Python package with useful functions for plotting several network distributions (degree, clustering coefficient by degree, etc.), as well as other functions for producing random graphs.
+Python package with useful functions for plotting several network distributions (degree, clustering coefficient by degree, etc.), as well as other functions for producing random graphs. All useful functions can be imported trough
+```console
+from network_tools.functions import *
+```
 
 ## License
 
