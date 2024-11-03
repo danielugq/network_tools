@@ -112,7 +112,7 @@ def degree_distribution(G, number_of_bins=15, log_binning=True, density=True, di
     k = list(dict(G.degree()).values())
 
     kmax = np.max(k)
-    kmin = 0
+    kmin = 1
 
     if log_binning:
         bins = np.logspace(kmin, np.log10(kmax+1), number_of_bins+1)
