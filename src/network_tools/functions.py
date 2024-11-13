@@ -4,128 +4,91 @@ from collections import Counter
 
 
 
-def local_clustering_distribution(G):
+def local_clustering_distribution(G, log_binning=False, num_bins=10):
     """
     Computes the average local clustering coefficient for nodes of each degree in the graph G.
-
-    The local clustering coefficient of a node quantifies how close its neighbors are to being a 
-    complete subgraph (i.e., how "clustered" the neighborhood is) by taking the ratio between
-    how many connections among a node's neighbors exist to all possible connections. 
-    This function calculates the average clustering coefficient for nodes with the same degree and 
-    returns the degree values and corresponding average clustering coefficients as arrays.
+    Optionally applies log-binning to the degrees.
 
     Parameters
     ----------
     G : networkx.Graph
         A NetworkX graph for which the local clustering distribution will be calculated.
-
+    log_binning : bool, optional
+        If True, applies log-binning to the degrees. Default is False.
+    num_bins : int, optional
+        Number of bins to use if log-binning is enabled. Ignored if log_binning is False.
+    
     Returns
     -------
     degrees : numpy.ndarray
-        An array of node degree values for which the average clustering coefficient is computed.
+        An array of node degree values (binned if log_binning=True) for which the average clustering
+        coefficient is computed.
     avg_c : numpy.ndarray
         An array of average clustering coefficients corresponding to each degree in the `degrees` array.
     
     Notes
     -----
-    - Nodes with the same degree are grouped together, and the average clustering coefficient is 
-      calculated for each degree.
-    - Degrees with no corresponding nodes in the graph are excluded from the output.
-    - Degree 0 nodes are also excluded, as their clustering coefficient is undefined.
-    
-    Example
-    -------
-    >>> import networkx as nx
-    >>> G = nx.erdos_renyi_graph(100, 0.1)
-    >>> degrees, avg_c = local_clustering_distribution(G)
-    >>> plt.plot(degrees, avg_c)
-    >>> plt.xlabel('Degree')
-    >>> plt.ylabel('Average Clustering Coefficient')
-    >>> plt.show()
+    - Nodes with the same degree are grouped together, and the average clustering coefficient is calculated 
+      for each degree or bin.
+    - Degree 0 nodes are excluded, as their clustering coefficient is undefined.
     """
     C_i = nx.clustering(G)
-    degree_histogram = np.array(nx.degree_histogram(G))
-    degree_histogram = np.where(degree_histogram == 0, np.nan, degree_histogram)
-    k_max = len(degree_histogram)
-    counts = np.zeros(k_max)
-    degrees = np.arange(0, k_max, 1)
-    for node, c in C_i.items():
-        counts[G.degree(node)] += c
-    avg_c = counts/degree_histogram
-    mask = ~np.isnan(avg_c)
-    avg_c = avg_c[mask][1:]
-    degrees = degrees[mask][1:]
+    degrees = np.array([d for n, d in G.degree()])
+    clustering = np.array([C_i[n] for n in G.nodes()])
+
+    # Calculate average clustering for each degree or bin
+    if log_binning:
+        # Define log bins
+        bins = np.logspace(np.log10(min(degrees[degrees > 0])), np.log10(max(degrees)), num_bins)
+        digitized = np.digitize(degrees, bins)
+        avg_c = [clustering[digitized == i].mean() for i in range(1, len(bins))]
+        degrees = [degrees[digitized == i].mean() for i in range(1, len(bins))]
+    else:
+        unique_degrees = np.unique(degrees)
+        avg_c = [clustering[degrees == d].mean() for d in unique_degrees]
+        degrees = unique_degrees
+
     return degrees, avg_c
 
-def degree_distribution(G, number_of_bins=15, log_binning=True, density=True, directed=False):
+ef degree_distribution(G, log_binning=False, num_bins=10):
     """
-    Computes the degree distribution of a graph `G`.
-
-    The degree distribution shows the probability of nodes having a certain degree. The function 
-    allows for both linear and logarithmic binning of the degree values, and the output can be 
-    normalized as a probability density or raw counts.
+    Computes the degree distribution of a graph, with an option for log-binning.
 
     Parameters
     ----------
     G : networkx.Graph
         A NetworkX graph for which the degree distribution will be calculated.
-    number_of_bins : int, optional
-        The number of bins to use for the degree histogram (default is 15).
     log_binning : bool, optional
-        If True, the degree values will be binned using logarithmic spacing. If False, 
-        linear binning is used (default is True).
-    density : bool, optional
-        If True, the histogram will be normalized to form a probability density (default is True).
-        If False, the histogram will show the raw counts of nodes in each degree bin.
-    directed : bool, optional
-        If True, the degree distribution will account for directed graphs by treating in-degree 
-        and out-degree separately. Currently not implemented (default is False).
-
+        If True, applies log-binning to the degrees. Default is False.
+    num_bins : int, optional
+        Number of bins to use if log-binning is enabled. Ignored if log_binning is False.
+    
     Returns
     -------
-    bins_out : numpy.ndarray
-        The center points of the bins used to compute the degree distribution.
-    probs : numpy.ndarray
-        The values of the degree distribution, either as probabilities or counts depending on 
-        the `density` parameter.
+    k : numpy.ndarray
+        An array of unique degree values (binned if log_binning=True).
+    p_k : numpy.ndarray
+        An array of probabilities corresponding to each degree or bin, representing
+        the relative frequency of each degree in the graph.
 
     Notes
     -----
-    - The degree distribution is computed using the degree values of all nodes in the graph. 
-    - For `log_binning=True`, logarithmic spacing is applied to create the bins, which is useful 
-      when dealing with graphs that have a power-law degree distribution (e.g., scale-free networks).
-    - The function currently does not handle directed graphs even though the `directed` parameter 
-      exists; it only computes the distribution for undirected graphs.
-
-    Example
-    -------
-    >>> import networkx as nx
-    >>> import matplotlib.pyplot as plt
-    >>> G = nx.erdos_renyi_graph(1000, 0.01)
-    >>> bins, probs = degree_distribution(G, number_of_bins=20, log_binning=False, density=True)
-    >>> plt.plot(bins, probs)
-    >>> plt.xlabel('Degree')
-    >>> plt.ylabel('Probability')
-    >>> plt.show()
-
+    - The degree distribution is the probability distribution of the node degrees over the network.
+    - When log-binning is enabled, the degrees are grouped into logarithmically spaced bins to smooth 
+      the distribution for networks with a wide degree range.
     """
-    k = list(dict(G.degree()).values())
-
-    kmax = np.max(k)
-    kmin = 1
-
-    if log_binning:
-        bins = np.logspace(kmin, np.log10(kmax+1), number_of_bins+1)
-    else:
-        bins = np.linspace(kmin, kmax+1, num=number_of_bins+1)
-
-
-    probs, _ = np.histogram(k, bins, density=density)
-
-
-    bins_out = bins[1:] - np.diff(bins)/2.0
+    degrees = [d for _, d in G.degree()]
+    degree_counts = Counter(degrees)
+    k = np.array(list(degree_counts.keys()))
+    p_k = np.array(list(degree_counts.values()), dtype=float) / G.number_of_nodes()
     
-    return bins_out, probs
+    if log_binning:
+        bins = np.logspace(np.log10(k.min()), np.log10(k.max()), num_bins)
+        hist, bin_edges = np.histogram(degrees, bins=bins, density=True)
+        k = (bin_edges[:-1] + bin_edges[1:]) / 2
+        p_k = hist
+    
+    return k, p_k
 
 def eigenvector_centrality_distribution(G):
     """
